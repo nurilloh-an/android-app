@@ -37,19 +37,31 @@ jobs:
           gradle-version: 8.2
           gradle-home-cache-cleanup: true
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew || true
+      - name: Set up build environment
+        run: |
+          # Remove existing gradlew if it exists
+          rm -f gradlew gradlew.bat
+          
+          # Initialize Gradle wrapper
+          gradle wrapper --gradle-version 8.2
+          
+          # Make gradlew executable
+          chmod +x gradlew
+          
+          # Verify Gradle installation
+          ./gradlew --version
 
       - name: Build with Gradle
         run: |
-          ./gradlew --version
           ./gradlew build --stacktrace --no-daemon --warning-mode=all
 
       - name: Run tests
-        run: ./gradlew test --stacktrace --no-daemon --warning-mode=all
+        run: |
+          ./gradlew test --stacktrace --no-daemon --warning-mode=all
 
       - name: Generate APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon --warning-mode=all
+        run: |
+          ./gradlew assembleDebug --stacktrace --no-daemon --warning-mode=all
 
       - name: Upload APK to GitHub
         uses: actions/upload-artifact@v4
