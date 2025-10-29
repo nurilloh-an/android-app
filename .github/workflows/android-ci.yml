@@ -33,7 +33,10 @@ jobs:
 
       - name: Set up Gradle Wrapper
         run: |
-          ./gradlew wrapper --gradle-version=8.0
+          # First initialize the wrapper if it doesn't exist
+          if [ ! -f "gradlew" ]; then
+              gradle wrapper --gradle-version=8.0
+          fi
           chmod +x gradlew
 
       - name: Cache Gradle packages
