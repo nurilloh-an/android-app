@@ -40,12 +40,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
+        working-directory: app
         run: ./gradlew build --stacktrace --no-daemon
 
       - name: Run tests
+        working-directory: app
         run: ./gradlew test --stacktrace --no-daemon
 
       - name: Generate APK
+        working-directory: app
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK artifact
