@@ -4,15 +4,13 @@ on:
   push:
     branches: [ main ]
     tags:
-      - 'v*'          # (optional) enables releases on tag pushes like v1.2.3
+      - 'v*'  # Enables releases on tag pushes like v1.2.3
   pull_request:
     branches: [ main ]
 
 env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
   ANDROID_HOME: /usr/local/lib/android/sdk
-  # ✅ Remove the hard-coded JAVA_HOME to JDK 11
-  # JAVA_HOME: /usr/lib/jvm/temurin-11-jdk-amd64
 
 jobs:
   build:
@@ -28,35 +26,63 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+          cache: 'gradle'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v1
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Build with Gradle
-        working-directory: app
         run: ./gradlew build --stacktrace --no-daemon
 
       - name: Run tests
-        working-directory: app
         run: ./gradlew test --stacktrace --no-daemon
 
       - name: Generate APK
-        working-directory: app
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload APK artifact
+      - name: Upload APK to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
+
+      - name: Upload APK to Repository
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          
+          # Create a timestamp for the APK filename
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          APK_NAME="app-debug-$TIMESTAMP.apk"
+          
+          # Rename the APK with timestamp
+          mv app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+          
+          # Create a directory for APKs if it doesn't exist
+          mkdir -p apks
+          
+          # Move the APK to the apks directory
+          mv "$APK_NAME" "apks/"
+          
+          # Add, commit and push the APK
+          git add apks/
+          git commit -m "[CI] Add new APK: $APK_NAME" || echo "No changes to commit"
+          git push origin main
 
       - name: Upload mapping files
         if: ${{ failure() }}
@@ -69,7 +95,7 @@ jobs:
   release:
     name: Create Release
     needs: build
-    if: startsWith(github.ref_name, 'v')   # works with tags like v1.0.0
+    if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-latest
 
     steps:
@@ -81,21 +107,8 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./release/app-debug.apk
-          asset_name: app-debug.apk
-          asset_content_type: application/vnd.android.package-archive
